@@ -1,0 +1,69 @@
+name: SQL Deployment Template
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      sql-script-path:
+        required: true
+        type: string
+    secrets:
+      SQL_SERVER:
+        required: true
+      SQL_PASSWORD:
+        required: true
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'Need-Siphenathi-Approval' || '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install sqlcmd
+        run: |
+          echo "Installing sqlcmd on Ubuntu..."
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y curl gnupg
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+          echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
+
+      - name: ${{ inputs.environment }}
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_USER: Auto_user
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+        run: |
+          echo "Deploying to ${{ inputs.environment }} ($SQL_SERVER)..."
+          {
+            sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -i "${{ inputs.sql-script-path }}" -l 60
+            echo "Deployment to ${{ inputs.environment }} successful."
+          } || {
+            echo "::error::Deployment to ${{ inputs.environment }} failed!"
+            exit 1
+          }
+
+      - name: Verify Deployment
+        env:
+          SQL_SERVER: ${{ secrets.SQL_SERVER }}
+          SQL_USER: Auto_user
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+        run: |
+          echo "Verifying deployment in ${{ inputs.environment }}..."
+          {
+            sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT * FROM [dbo].[user]" -l 60
+            echo "Verification successful in ${{ inputs.environment }}."
+          } || {
+            echo "::error::Verification failed in ${{ inputs.environment }}!"
+            exit 1
+          }
