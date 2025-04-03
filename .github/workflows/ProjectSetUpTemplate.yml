@@ -1,0 +1,31 @@
+name: SQL Server Database Setup Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip-production:
+        description: 'Skip production deployment?'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  development:
+    uses: ./.github/workflows/SetUpTemplate.yml
+    with:
+      environment: 'development'
+      sql-script-path: 'DatabaseAdministration/SQLStatements/ProductionAndDeploymentProject.sql'
+    secrets:
+      SQL_SERVER: ${{ secrets.PINGGY_URL }}
+      SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+
+  production:
+    needs: development
+    if: ${{ !inputs.skip-production }}
+    uses: ./.github/workflows/SetUpTemplate.yml
+    with:
+      environment: 'production'
+      sql-script-path: 'DatabaseAdministration/SQLStatements/ProductionAndDeploymentProject.sql'
+    secrets:
+      SQL_SERVER: ${{ secrets.FRIEND_SERVER_URL }}
+      SQL_PASSWORD: ${{ secrets.FRIEND_SQL_PASSWORD }}
